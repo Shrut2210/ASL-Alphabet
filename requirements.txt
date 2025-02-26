@@ -6,3 +6,4 @@ mediapipe
 pillow
 streamlit-webrtc
 av
+cv2
