@@ -1,7 +1,7 @@
-streamlit
-opencv-python
-tensorflow
 numpy
+streamlit
+opencv-python-headless
+tensorflow
 mediapipe
 pillow
 streamlit-webrtc
