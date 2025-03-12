@@ -122,8 +122,8 @@ class VideoProcessor(VideoTransformerBase):
                     confidence = np.max(prediction)
                     predicted_class = classes[np.argmax(prediction)]
                     
-                    cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 0, 255), 2)
-                    cv2.putText(frame, f"{predicted_class} ({confidence:.2f}%)", (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+                    cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 0, 255), 2)
+                    cv2.putText(img, f"{predicted_class} ({confidence:.2f}%)", (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
         return img 
 
 webrtc_streamer(key="asl_live", video_processor_factory=VideoProcessor, rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
