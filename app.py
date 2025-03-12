@@ -72,62 +72,60 @@
 import streamlit as st
 import tensorflow as tf
 import numpy as np
-import mediapipe as mp
 import cv2
-from PIL import Image
+import mediapipe as mp
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 # Load Model
 model = tf.keras.models.load_model("./30_binary_model.h5")
 
-# Define classes
+# Define Classes
 classes = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 # Initialize MediaPipe Hands
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.5)
+hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
 
-st.title("ASL Alphabet Recognition")
+# Streamlit UI
+st.title("Live ASL Alphabet Recognition")
 
-# Capture image from webcam
-image_file = st.camera_input("Take a picture")
+# Define Video Transformer
+class VideoProcessor(VideoTransformerBase):
+    def transform(self, frame):
+        img = frame.to_ndarray(format="bgr24")
 
-if image_file:
-    # Read image
-    image = Image.open(image_file)
-    image = np.array(image)
+        # Convert to RGB
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = hands.process(img_rgb)
 
-    # Convert to RGB
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                h, w, _ = img.shape
+                x_min = max(0, int(min([lm.x for lm in hand_landmarks.landmark]) * w - 30))
+                y_min = max(0, int(min([lm.y for lm in hand_landmarks.landmark]) * h - 30))
+                x_max = min(w, int(max([lm.x for lm in hand_landmarks.landmark]) * w + 30))
+                y_max = min(h, int(max([lm.y for lm in hand_landmarks.landmark]) * h + 30))
 
-    # Process with MediaPipe Hands
-    results = hands.process(image_rgb)
+                cropped_hand = img[y_min:y_max, x_min:x_max]
 
-    if results.multi_hand_landmarks:
-        for hand_landmarks in results.multi_hand_landmarks:
-            h, w, _ = image.shape
-            x_min = max(0, int(min([lm.x for lm in hand_landmarks.landmark]) * w - 30))
-            y_min = max(0, int(min([lm.y for lm in hand_landmarks.landmark]) * h - 30))
-            x_max = min(w, int(max([lm.x for lm in hand_landmarks.landmark]) * w + 30))
-            y_max = min(h, int(max([lm.y for lm in hand_landmarks.landmark]) * h + 30))
+                if cropped_hand.size != 0:
+                    resized_hand = cv2.resize(cropped_hand, (100, 100))
+                    resized_hand = resized_hand.astype("float32") / 255.0
+                    resized_hand = np.expand_dims(resized_hand, axis=0)
 
-            cropped_hand = image[y_min:y_max, x_min:x_max]
+                    # Predict ASL alphabet
+                    prediction = model.predict(resized_hand)
+                    predicted_class = classes[np.argmax(prediction)]
+                    confidence = np.max(prediction)
 
-            if cropped_hand.size != 0:
-                resized_hand = cv2.resize(cropped_hand, (100, 100))
-                resized_hand = resized_hand.astype("float32") / 255.0
-                resized_hand = np.expand_dims(resized_hand, axis=0)
+                    # Draw rectangle and label
+                    cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 0, 255), 2)
+                    cv2.putText(img, f"{predicted_class} ({confidence:.2f})", 
+                                (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                                1, (0, 0, 255), 2, cv2.LINE_AA)
 
-                # Make prediction
-                prediction = model.predict(resized_hand)
-                predicted_class = classes[np.argmax(prediction)]
-                confidence = np.max(prediction)
+        return img
 
-                # Draw rectangle and label on image
-                cv2.rectangle(image, (x_min, y_min), (x_max, y_max), (0, 0, 255), 2)
-                cv2.putText(image, f"{predicted_class} ({confidence:.2f})", 
-                            (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                            1, (0, 0, 255), 2, cv2.LINE_AA)
-
-    # Show result
-    st.image(image, channels="RGB", caption="Predicted ASL Letter")
+# Start WebRTC Stream
+webrtc_streamer(key="asl_live", video_processor_factory=VideoProcessor)
 
