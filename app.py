@@ -76,22 +76,19 @@ import cv2
 import mediapipe as mp
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
-# Load ASL Model
 model = tf.keras.models.load_model("./30_binary_model.h5")
 classes = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+IMG_SIZE = 100
 
-# Initialize MediaPipe Hands
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
 
-st.title("🤟 ASL Alphabet Recognition (Live Camera)")
+st.title("🤟 ASL Alphabet Recognition ")
 
-# Define Video Processor Class
 class VideoProcessor(VideoTransformerBase):
     def transform(self, frame):
-        img = frame.to_ndarray(format="bgr24")  # Convert frame to OpenCV format
+        img = frame.to_ndarray(format="bgr24")  
 
-        # Convert to RGB for MediaPipe
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = hands.process(img_rgb)
 
@@ -105,25 +102,29 @@ class VideoProcessor(VideoTransformerBase):
 
                 cropped_hand = img[y_min:y_max, x_min:x_max]
 
-                if cropped_hand.size != 0:
-                    resized_hand = cv2.resize(cropped_hand, (100, 100))  # Resize to match model input
-                    resized_hand = cv2.cvtColor(resized_hand, cv2.COLOR_BGR2GRAY)  # Convert to grayscale if needed
-                    resized_hand = resized_hand.astype("float32") / 255.0  # Normalize
-                    resized_hand = np.expand_dims(resized_hand, axis=(0, -1))  # Reshape for model
-
-                    # Predict ASL Alphabet
-                    prediction = model.predict(resized_hand)
-                    predicted_class = classes[np.argmax(prediction)]
+                if cropped_hand.size != 0 :
+                    resized_hand = cv2.resize(cropped_hand, (IMG_SIZE, IMG_SIZE))
+                    landmark_tensor = []
+                    landmark_tensor = np.zeros((IMG_SIZE, IMG_SIZE))
+                    
+                    for idx in range(0,21) :
+                        x = int(hand_landmarks.landmark[idx].x * w)
+                        y = int(hand_landmarks.landmark[idx].y * h)
+                        
+                        x_norm = min(int(((x - x_min) / (x_max - x_min)) * (IMG_SIZE - 1)), IMG_SIZE - 1)
+                        y_norm = min(int(((y - y_min) / (y_max - y_min)) * (IMG_SIZE - 1)), IMG_SIZE - 1)
+                        
+                        landmark_tensor[y_norm, x_norm] = 1
+                    
+                    landmark_tensor = landmark_tensor.reshape(1, IMG_SIZE, IMG_SIZE, 1)
+                    
+                    prediction = model.predict(landmark_tensor)
                     confidence = np.max(prediction)
+                    predicted_class = classes[np.argmax(prediction)]
+                    
+                    cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 0, 255), 2)
+                    cv2.putText(frame, f"{predicted_class} ({confidence:.2f}%)", (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+        return img 
 
-                    # Draw rectangle & label
-                    cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-                    cv2.putText(img, f"{predicted_class} ({confidence:.2f})", 
-                                (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                                1, (0, 255, 0), 2, cv2.LINE_AA)
-
-        return img  # Return processed frame
-
-# Start Streamlit WebRTC Video
 webrtc_streamer(key="asl_live", video_processor_factory=VideoProcessor, rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
 
