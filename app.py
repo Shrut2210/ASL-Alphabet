@@ -69,10 +69,10 @@
 #     cap.release()
 #     cv2.destroyAllWindows()
 
-import streamlit as st
-import tensorflow as tf
 import numpy as np
+import streamlit as st
 import cv2
+import tensorflow as tf
 import mediapipe as mp
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
